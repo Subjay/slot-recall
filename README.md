@@ -1,7 +1,5 @@
 # slot-recall
-Webapp for booking medical appointments + automated calling AI system whenever a slot becomes available again
-
-What should be done :
+Context, we are creating a webapp to handles recalling clients whenever an appointment is cancelled for a general practitioner.
 
 # Front :
 ## Calendar UI (Fake or not if time) with slots and at least one that we can cancel.
@@ -20,7 +18,30 @@ Whatever we can do from this list :
  - outcomes by reason
 
 # Backend :
-AI call needs to understand Yes/No
-If client doesn't respond => if there isn't another on the waiting list : leave a voicemal
-Dashboard to track in live what is happening for the receptionist.
-Pull up weekly numbers/stats => refill rate, revenue recovered, attempts per slot, and outcomes by reason
+
+## AI calls
+### Phone calls
+
+- Connect webapp to fonio's APIs.
+- Handle the consent for the outbound call.
+
+### Speech to Text and Text to Speech
+- Needs to understand Yes/No answers.
+- If client doesn't respond right away and there isn't another on the waiting list : leave a voicemal Else : next call on the waiting list.
+
+
+## Waiting list choosing algorithm
+
+- First in First out.
+- Geolocation.
+- Client's doctor preferences.
+- Client's time preference (for when to be called).
+- If already been called in the same day or not.
+- Reliability when called.
+- Ask to be reached by phone or email.
+
+## Database
+
+Clients infos
+Waiting List
+Doctors infos
