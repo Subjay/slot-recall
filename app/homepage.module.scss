@@ -1,0 +1,7 @@
+@use "@styles/variables.scss" as *;
+@use "@styles/mixin.scss" as mixin;
+
+.page {
+  @include mixin.flex-page();
+  overflow-x: hidden;
+}

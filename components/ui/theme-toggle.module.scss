@@ -1,0 +1,33 @@
+@use "@styles/variables.scss" as *;
+
+.themeToggle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: var(--_size);
+  min-width: var(--_size);
+  padding: 0%;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  color: var(--neutral-dark);
+}
+
+.smallIcon {
+  --_size: 2.2em;
+  font-size: $font-s;
+}
+
+.mediumIcon {
+  --_size: 2.4em;
+  font-size: $font-md;
+}
+
+.largeIcon {
+  --_size: 2.4em;
+  font-size: $font-l;
+}

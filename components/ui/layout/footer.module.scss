@@ -1,0 +1,21 @@
+@use "@styles/variables.scss" as *;
+
+.container {
+  margin-top: $space-sm;
+}
+
+.content {
+  width: 80%;
+  margin-inline: auto;
+  padding-block: $space-xxs;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.copyright {
+  font-size: $font-xs;
+  flex: 1;
+  min-width: 0;
+}

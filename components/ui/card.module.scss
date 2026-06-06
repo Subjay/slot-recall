@@ -1,0 +1,12 @@
+@use "@styles/variables.scss" as *;
+
+.container {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  color: var(--neutral-foreground);
+  background: var(--gradient-card);
+  background-repeat: no-repeat;
+  border: 1px solid var(--neutral-inverted-a10);
+}

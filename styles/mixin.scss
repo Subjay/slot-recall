@@ -1,0 +1,10 @@
+@use "@styles/variables.scss" as *;
+
+@mixin flex-page() {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100vw;
+  flex: 1;
+  min-height: 0;
+}
