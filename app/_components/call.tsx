@@ -12,7 +12,7 @@ export default function Call() {
         toNumber: "+4367764842662",
         first_name: "Vlad",
         last_name: "Doe",
-        date: new Date("2026-02-13"),
+        date: "2026-02-13",
         location: "123 Baker Street, London",
         doctor: "Bauer",
         doctor_phone: "+4367764842662",
@@ -22,7 +22,7 @@ export default function Call() {
 
   return (
     <button
-      onClick={async (_e) => {
+      onClick={async () => {
         await fetchCall();
       }}
     >

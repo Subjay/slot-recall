@@ -116,6 +116,11 @@ type Metric = {
   detail: string;
   icon: string;
 };
+type DashboardPayload = {
+  appointments?: Appointment[];
+  actions?: AiAction[];
+  metrics?: Metric[];
+};
 
 const todaySeed: AppointmentSeed[] = [
   {
@@ -155,6 +160,18 @@ const todaySeed: AppointmentSeed[] = [
     notes: "Short visit, can arrive with 20 minutes notice.",
   },
   {
+    id: "apt-0940",
+    patient: "Ivo Hartmann",
+    start: "09:40",
+    end: "10:10",
+    status: "confirmed",
+    visit: "Review",
+    phone: "+43 681 212 904",
+    originalDate: "Jun 23",
+    waitSaved: "17 days",
+    notes: "Can be moved within the morning.",
+  },
+  {
     id: "apt-1035",
     patient: "Peter Huber",
     start: "10:35",
@@ -177,6 +194,18 @@ const todaySeed: AppointmentSeed[] = [
     originalDate: "Jun 18",
     waitSaved: "12 days",
     notes: "Needs a quiet confirmation call if moved.",
+  },
+  {
+    id: "apt-1225",
+    patient: "Milan Kral",
+    start: "12:25",
+    end: "12:55",
+    status: "confirmed",
+    visit: "Follow-up",
+    phone: "+43 699 330 712",
+    originalDate: "Jun 26",
+    waitSaved: "20 days",
+    notes: "Lunch window works best.",
   },
   {
     id: "apt-1320",
@@ -203,6 +232,18 @@ const todaySeed: AppointmentSeed[] = [
     notes: "Available after lunch.",
   },
   {
+    id: "apt-1535",
+    patient: "Klara Novak",
+    start: "15:35",
+    end: "16:05",
+    status: "confirmed",
+    visit: "Check-up",
+    phone: "+43 660 840 129",
+    originalDate: "Jun 22",
+    waitSaved: "16 days",
+    notes: "Prefers a short afternoon appointment.",
+  },
+  {
     id: "apt-1630",
     patient: "Rina Novak",
     start: "16:30",
@@ -215,6 +256,18 @@ const todaySeed: AppointmentSeed[] = [
     notes: "Consent recorded for outbound scheduling calls.",
   },
   {
+    id: "apt-1705",
+    patient: "Oliver Kunz",
+    start: "17:05",
+    end: "17:35",
+    status: "confirmed",
+    visit: "Review",
+    phone: "+43 676 412 882",
+    originalDate: "Jun 24",
+    waitSaved: "18 days",
+    notes: "Can come after work.",
+  },
+  {
     id: "apt-1815",
     patient: "Jonas Klein",
     start: "18:15",
@@ -225,6 +278,18 @@ const todaySeed: AppointmentSeed[] = [
     originalDate: "Jun 16",
     waitSaved: "10 days",
     notes: "Can take earlier slots after 17:00.",
+  },
+  {
+    id: "apt-1905",
+    patient: "Theo Brandner",
+    start: "19:05",
+    end: "20:05",
+    status: "confirmed",
+    visit: "Consultation",
+    phone: "+43 681 905 441",
+    originalDate: "Jun 30",
+    waitSaved: "24 days",
+    notes: "Long slot used to test split refills.",
   },
   {
     id: "apt-2040",
@@ -356,8 +421,8 @@ const seedActions: AiAction[] = [
     slot: "13:20-13:50",
     candidate: "Amira Hassan",
     elapsed: "",
-    answer: "Confirming the new appointment.",
-    status: "talking",
+    answer: "High match, ready to be called.",
+    status: "queued",
     source: "Morning cancellation",
   },
   {
@@ -553,7 +618,7 @@ const navItems: { id: PageId; label: string }[] = [
 ];
 // TEST: when true every freed slot ends in "no match found" so the no-match
 // message can be verified. false = live matching (a caller accepts → fly-in).
-const SIMULATE_NO_MATCH = true;
+const SIMULATE_NO_MATCH = false;
 
 const calendarStartHour = 7;
 const calendarEndHour = 22;
@@ -648,6 +713,7 @@ function layoutAppointments(appointments: Appointment[]): AppointmentLayout[] {
 export default function Home() {
   const [appointments, setAppointments] = useState(initialAppointments);
   const [actions, setActions] = useState(initialActions);
+  const [serverMetrics, setServerMetrics] = useState<Metric[] | null>(null);
   const [activePage, setActivePage] = useState<PageId>("dashboard");
   const [activeDay, setActiveDay] = useState<DayId>("Today");
   const [now, setNow] = useState(() => new Date());
@@ -662,7 +728,12 @@ export default function Home() {
   const [flightActive, setFlightActive] = useState(false);
   const [justFilledId, setJustFilledId] = useState<string | null>(null);
   const [scan, setScan] = useState<{ top: number; height: number }[]>([]);
+  const [scanTargetIds, setScanTargetIds] = useState<string[]>([]);
   const [noMatchIds, setNoMatchIds] = useState<string[]>([]);
+  // Slots the user dismissed after a no-match. They stay open and are re-scanned
+  // automatically on the next cancellation, until filled or fully removed.
+  const [openSlotIds, setOpenSlotIds] = useState<string[]>([]);
+  const openSlotIdsRef = useRef<string[]>([]);
   const [result, setResult] = useState<{
     text: string;
     hasNoMatch: boolean;
@@ -676,8 +747,9 @@ export default function Home() {
   const runSizeRef = useRef(0);
   const runNoMatchRef = useRef(0);
   const callTimersRef = useRef<number[]>([]);
+  const searchPhaseRef = useRef<SearchPhase>("idle");
 
-  const metrics = useMemo(() => {
+  const fallbackMetrics = useMemo(() => {
     const cancelledAppointments = appointments.filter(
       (appointment) => appointment.status === "cancelled",
     ).length;
@@ -710,6 +782,7 @@ export default function Home() {
       },
     ] satisfies Metric[];
   }, [appointments]);
+  const metrics = serverMetrics ?? fallbackMetrics;
 
   const calendarAppointments = useMemo(
     () =>
@@ -741,6 +814,49 @@ export default function Home() {
   useEffect(() => {
     orderedWaitlistRef.current = orderedWaitlist;
   }, [orderedWaitlist]);
+
+  useEffect(() => {
+    searchPhaseRef.current = searchPhase;
+  }, [searchPhase]);
+
+  useEffect(() => {
+    openSlotIdsRef.current = openSlotIds;
+  }, [openSlotIds]);
+
+  function applyDashboardState(data: DashboardPayload) {
+    if (Array.isArray(data.appointments)) {
+      setAppointments(data.appointments);
+    }
+    if (Array.isArray(data.actions)) {
+      setActions(data.actions);
+    }
+    if (Array.isArray(data.metrics)) {
+      setServerMetrics(data.metrics);
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadDashboard() {
+      if (searchPhaseRef.current !== "idle") return;
+      try {
+        const response = await fetch("/api/dashboard");
+        if (!response.ok) return;
+        const data = (await response.json()) as DashboardPayload;
+        if (mounted) applyDashboardState(data);
+      } catch {
+        // Keep the local demo seed visible when the backend is unavailable.
+      }
+    }
+
+    void loadDashboard();
+    const interval = window.setInterval(loadDashboard, 6000);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   function clearCallTimers() {
     callTimersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -923,6 +1039,7 @@ export default function Home() {
     }
     setResult({ text, hasNoMatch: noMatch > 0 });
     setSearchPhase("done");
+    setScanTargetIds([]);
   }
 
   useEffect(() => {
@@ -1066,7 +1183,34 @@ export default function Home() {
           : item,
       ),
     );
+    setResult(null);
     runSearch(ids);
+
+    void fetch("/api/appointments/cancel", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ids }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Cancellation workflow failed.");
+        }
+        return (await response.json()) as {
+          results?: { status?: string }[];
+          state?: DashboardPayload;
+        };
+      })
+      .then((data) => {
+        window.setTimeout(() => {
+          if (data.state) applyDashboardState(data.state);
+        }, Math.min(7200, 3200 + ids.length * 1200));
+      })
+      .catch(() => {
+        setResult({ text: "Workflow could not start", hasNoMatch: true });
+        setSearchPhase("done");
+      });
   }
 
   // Run (or re-run) the replacement search for a set of freed slots.
@@ -1076,8 +1220,11 @@ export default function Home() {
     runSizeRef.current = ids.length;
     runNoMatchRef.current = 0;
     setResult(null);
-    // Only clear the no-match flag for the slots we are (re)searching.
+    // Only clear the no-match flag for the slots we are (re)searching. Open
+    // slots being re-scanned drop out of the open list until they resolve again.
     setNoMatchIds((current) => current.filter((id) => !ids.includes(id)));
+    setOpenSlotIds((current) => current.filter((id) => !ids.includes(id)));
+    setScanTargetIds(ids);
     clearCallTimers();
     setFlight(null);
     setJustFilledId(null);
@@ -1130,9 +1277,19 @@ export default function Home() {
     runSearch([id]);
   }
 
-  // No match: give up and free the slot for good (remove it from the day).
+  // No match: set the slot aside as an open slot. It stays free and is scanned
+  // again automatically on the next cancellation (see finalizeCancelBatch).
   function deleteSlot(id: string) {
+    setNoMatchIds((current) => current.filter((existing) => existing !== id));
+    setOpenSlotIds((current) =>
+      current.includes(id) ? current : [...current, id],
+    );
+  }
+
+  // Open slot: remove it from the day for good.
+  function removeSlot(id: string) {
     setAppointments((current) => current.filter((apt) => apt.id !== id));
+    setOpenSlotIds((current) => current.filter((existing) => existing !== id));
     setNoMatchIds((current) => current.filter((existing) => existing !== id));
   }
 
@@ -1319,6 +1476,8 @@ export default function Home() {
               const isCounting = countdown?.ids.includes(appointment.id) ?? false;
               const cancelled = appointment.status === "cancelled";
               const isNoMatch = noMatchIds.includes(appointment.id);
+              const isOpenSlot = openSlotIds.includes(appointment.id);
+              const isResolving = scanTargetIds.includes(appointment.id);
 
               return (
                 <article
@@ -1326,7 +1485,11 @@ export default function Home() {
                     isCounting ? " counting" : ""
                   }${isSelected ? " selected" : ""}${
                     isNoMatch ? " no-match" : ""
-                  }${justFilledId === appointment.id ? " landed" : ""}`}
+                  }${isOpenSlot ? " open-slot" : ""}${
+                    isResolving ? " resolving" : ""
+                  }${
+                    justFilledId === appointment.id ? " landed" : ""
+                  }`}
                   key={appointment.id}
                   data-appointment-id={appointment.id}
                   style={{
@@ -1344,6 +1507,13 @@ export default function Home() {
                       <>
                         <span className="appointment-name">No match</span>
                         <span className="appointment-visit">Slot still open</span>
+                      </>
+                    ) : isOpenSlot ? (
+                      <>
+                        <span className="appointment-name">Open slot</span>
+                        <span className="appointment-visit">
+                          Re-scans on next cancel
+                        </span>
                       </>
                     ) : (
                       <>
@@ -1376,7 +1546,30 @@ export default function Home() {
                           deleteSlot(appointment.id);
                         }}
                       >
-                        Delete
+                        Dismiss
+                      </button>
+                    </span>
+                  ) : isOpenSlot ? (
+                    <span className="appointment-actions nomatch-actions">
+                      <button
+                        className="slot-retry"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          retrySlot(appointment.id);
+                        }}
+                      >
+                        Scan now
+                      </button>
+                      <button
+                        className="slot-delete"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeSlot(appointment.id);
+                        }}
+                      >
+                        Remove
                       </button>
                     </span>
                   ) : (

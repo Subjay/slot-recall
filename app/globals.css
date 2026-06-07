@@ -875,6 +875,21 @@ button:disabled {
   color: var(--color-danger);
 }
 
+.appointment-card.resolving .appointment-time,
+.appointment-card.resolving .appointment-main {
+  filter: blur(1.7px);
+  opacity: 0.58;
+}
+
+.appointment-card.resolving::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.18);
+  content: "";
+  pointer-events: none;
+}
+
 /* No replacement found — the slot stays open and actionable (retry / delete) */
 .appointment-card.no-match {
   border-style: dashed;
@@ -885,6 +900,22 @@ button:disabled {
 .appointment-card.no-match .appointment-time,
 .appointment-card.no-match .appointment-name {
   color: var(--color-danger);
+}
+
+/* Dismissed slot kept open — quiet, neutral, waiting for the next scan */
+.appointment-card.open-slot {
+  border-style: dashed;
+  border-color: #d4d4d4;
+  background: var(--color-paper-white);
+}
+
+.appointment-card.open-slot .appointment-time,
+.appointment-card.open-slot .appointment-name {
+  color: var(--color-charcoal);
+}
+
+.appointment-card.open-slot .appointment-visit {
+  color: #9a9a9a;
 }
 
 .nomatch-actions {
