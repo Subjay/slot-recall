@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     location,
     doctor,
     doctor_phone,
+    reservation_id,
   } = await req.json();
   const date = new Date(bookingDate);
 
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
             year: "2-digit",
           }),
           location,
+          reservation_id,
         },
       }),
     },

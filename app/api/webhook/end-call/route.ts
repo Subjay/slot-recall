@@ -7,6 +7,7 @@ import { reservation } from "@/lib/db/schemas/reservation";
 import { waitingClient } from "@/lib/db/schemas/waiting-client";
 import { generateRankingList } from "@/lib/services/raking";
 import { findWaitingClients } from "@/lib/services/waiting-client";
+import { addCall } from "@/lib/services/call";
 
 type EndCallContext = {
   client_id: string;
@@ -26,8 +27,6 @@ type ExtractionData = {
 export async function POST(req: NextRequest) {
   const body = await req.json();
 
-  console.log(body, "************");
-
   const { answer, reason }: ExtractionData = body.extractionData;
   const {
     client_id,
@@ -46,8 +45,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const isNoAnswer =
-    answer === null || answer === undefined || answer.toLowerCase() === "no";
+  const isYes = answer ? answer.toLowerCase() === "yes" : false;
 
   await updateCall({
     id: call_id,
@@ -61,11 +59,15 @@ export async function POST(req: NextRequest) {
     .set({ status: "resolved" })
     .where(eq(waitingClient.clientId, client_id));
 
-  if (!isNoAnswer && reservation_id) {
+  if (isYes && reservation_id) {
     await database
       .update(reservation)
       .set({ status: "rebooked" })
       .where(eq(reservation.id, reservation_id));
+
+    return Response.json({
+      success: true,
+    });
   }
 
   const rankedClients = generateRankingList(await findWaitingClients());
@@ -76,6 +78,13 @@ export async function POST(req: NextRequest) {
   }
 
   const { firstName, lastName } = nextClient.client;
+
+  await addCall({
+    clientId: nextClient.clientId,
+    status: "started",
+    answer: false,
+    reason: null,
+  });
 
   const response = await fetch(
     "https://app.fonio.ai/api/public/v1/outbound_call",
@@ -103,6 +112,7 @@ export async function POST(req: NextRequest) {
             year: "2-digit",
           }),
           location,
+          reservation_id,
         },
       }),
     },
@@ -110,11 +120,5 @@ export async function POST(req: NextRequest) {
 
   return Response.json({
     success: true,
-    calls: [
-      {
-        waitingClientId: nextClient.id,
-        status: response.ok ? "fulfilled" : "rejected",
-      },
-    ],
   });
 }
