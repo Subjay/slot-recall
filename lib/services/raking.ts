@@ -12,25 +12,25 @@ const metrics = [
     label: "Slots refilled",
     value: "8",
     detail: "31 this week",
-    icon: "/icons/KPI1.png",
+    icon: "/icons/KPI1-Photoroom.png",
   },
   {
     label: "Average time to rebook",
     value: "2m 18s",
     detail: "40 calls included",
-    icon: "/icons/KPI2.png",
+    icon: "/icons/KPI2-Photoroom-clean.png",
   },
   {
     label: "Average waiting time saved",
     value: "12.4 days",
     detail: "Per accepted patient",
-    icon: "/icons/KPI3.png",
+    icon: "/icons/KPI3-Photoroom.png",
   },
   {
     label: "Refill Rate",
     value: "89%",
     detail: "16 of 18 cancellations",
-    icon: "/icons/KPI4.png",
+    icon: "/icons/KPI4-Photoroom.png",
   },
 ] satisfies Metric[];
 

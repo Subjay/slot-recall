@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMetrics } from "@/lib/hooks/metrics";
 import { Metrics } from "@/components/ui/metrics";
 import { useReservations } from "@/lib/hooks/reservations";
@@ -9,7 +9,10 @@ import { useWaitingList } from "@/lib/hooks/waiting-list";
 import WaitingList from "./_components/waiting-list";
 import CallsList from "./_components/calls-list";
 import { generateRankingList } from "@/lib/services/raking";
-import type { WaitingListItem } from "@/lib/services/waiting-client";
+
+function ErrorMessage({ message }: { message: string }) {
+  return <p style={{ color: "#b42318", margin: 0 }}>{message}</p>;
+}
 
 export default function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -35,20 +38,16 @@ export default function Home() {
     error: waitingError,
   } = useWaitingList(refreshKey);
 
-  const [rankedWaitingList, setRankedWaitingList] = useState<WaitingListItem[]>(
-    waiting_list ?? [],
-  );
-
-  useEffect(() => {
-    setRankedWaitingList(
+  const rankedWaitingList = useMemo(
+    () =>
       generateRankingList(
         (waiting_list ?? []).map((item) => ({
           ...item,
           callDate: new Date(item.callDate),
         })),
       ),
-    );
-  }, [waiting_list]);
+    [waiting_list],
+  );
 
   function refreshTrigger() {
     setRefreshKey((currentRefreshKey) => currentRefreshKey + 1);
@@ -65,6 +64,8 @@ export default function Home() {
         <div style={{ gridColumn: "1 / -1" }}>
           {metricsLoading ? (
             "Metrics loading..."
+          ) : metricsError ? (
+            <ErrorMessage message={metricsError} />
           ) : (
             <Metrics metrics={metrics} />
           )}
@@ -73,6 +74,8 @@ export default function Home() {
         <div style={{ minWidth: 0 }}>
           {reservationsLoading ? (
             "loading..."
+          ) : reservationsError ? (
+            <ErrorMessage message={reservationsError} />
           ) : (
             <ReservationsCalendar
               reservations={reservations}
@@ -85,6 +88,8 @@ export default function Home() {
         <div style={{ minWidth: 0 }}>
           {waitingLoading ? (
             "loading..."
+          ) : waitingError ? (
+            <ErrorMessage message={waitingError} />
           ) : (
             <WaitingList list={rankedWaitingList} />
           )}

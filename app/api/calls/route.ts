@@ -1,10 +1,23 @@
-import database from "@/lib/db";
-import { call } from "@/lib/db/schemas/call";
-import { client } from "@/lib/db/schemas/client";
+import {
+  getMissingServerConfig,
+  missingServerConfigResponse,
+} from "@/lib/api/config";
 import { asc, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET() {
+  const missingConfig = getMissingServerConfig(["DATABASE_URL"]);
+
+  if (missingConfig.length > 0) {
+    return missingServerConfigResponse(missingConfig);
+  }
+
+  const [{ default: database }, { call }, { client }] = await Promise.all([
+    import("@/lib/db"),
+    import("@/lib/db/schemas/call"),
+    import("@/lib/db/schemas/client"),
+  ]);
+
   const calls = await database
     .select({
       id: call.id,

@@ -1,4 +1,7 @@
-import { setReservation } from "@/lib/services/reservation";
+import {
+  getMissingServerConfig,
+  missingServerConfigResponse,
+} from "@/lib/api/config";
 import type { ReservationUpdate } from "@/lib/dal/reservation/types";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -9,6 +12,13 @@ type RouteContext = {
 };
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
+  const missingConfig = getMissingServerConfig(["DATABASE_URL"]);
+
+  if (missingConfig.length > 0) {
+    return missingServerConfigResponse(missingConfig);
+  }
+
+  const { setReservation } = await import("@/lib/services/reservation");
   const { id } = await params;
   const reservation: ReservationUpdate = await req.json();
   const updatedReservation = await setReservation({ ...reservation, id });

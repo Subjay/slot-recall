@@ -1,13 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 
-import { updateCall } from "@/lib/dal/call/mutations";
-import database from "@/lib/db";
-import { reservation } from "@/lib/db/schemas/reservation";
-import { waitingClient } from "@/lib/db/schemas/waiting-client";
-import { generateRankingList } from "@/lib/services/raking";
-import { findWaitingClients } from "@/lib/services/waiting-client";
-import { addCall } from "@/lib/services/call";
+import {
+  getMissingServerConfig,
+  missingServerConfigResponse,
+} from "@/lib/api/config";
 
 type EndCallContext = {
   client_id: string;
@@ -25,6 +22,34 @@ type ExtractionData = {
 };
 
 export async function POST(req: NextRequest) {
+  const missingConfig = getMissingServerConfig([
+    "DATABASE_URL",
+    "FONIO_API_KEY",
+    "OUTBOUND_NUMBER",
+    "AGENT_ID",
+  ]);
+
+  if (missingConfig.length > 0) {
+    return missingServerConfigResponse(missingConfig);
+  }
+
+  const [
+    { updateCall },
+    { default: database },
+    { reservation },
+    { waitingClient },
+    { generateRankingList },
+    { findWaitingClients },
+    { addCall },
+  ] = await Promise.all([
+    import("@/lib/dal/call/mutations"),
+    import("@/lib/db"),
+    import("@/lib/db/schemas/reservation"),
+    import("@/lib/db/schemas/waiting-client"),
+    import("@/lib/services/raking"),
+    import("@/lib/services/waiting-client"),
+    import("@/lib/services/call"),
+  ]);
   const body = await req.json();
 
   const { answer, reason }: ExtractionData = body.extractionData;
@@ -86,7 +111,7 @@ export async function POST(req: NextRequest) {
     reason: null,
   });
 
-  const response = await fetch(
+  await fetch(
     "https://app.fonio.ai/api/public/v1/outbound_call",
     {
       method: "POST",

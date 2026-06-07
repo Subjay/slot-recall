@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { addCall } from "@/lib/services/call";
-import { findClient } from "@/lib/services/client";
+import {
+  getMissingServerConfig,
+  missingServerConfigResponse,
+} from "@/lib/api/config";
 
 export async function POST(req: NextRequest) {
+  const missingConfig = getMissingServerConfig([
+    "DATABASE_URL",
+    "FONIO_API_KEY",
+    "OUTBOUND_NUMBER",
+    "AGENT_ID",
+  ]);
+
+  if (missingConfig.length > 0) {
+    return missingServerConfigResponse(missingConfig);
+  }
+
+  const [{ addCall }, { findClient }] = await Promise.all([
+    import("@/lib/services/call"),
+    import("@/lib/services/client"),
+  ]);
   const {
     toNumber,
     first_name,

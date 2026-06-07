@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getReservationCallContext } from "@/lib/services/call";
-import { generateRankingList } from "@/lib/services/raking";
-import { findWaitingClients } from "@/lib/services/waiting-client";
+import {
+  getMissingServerConfig,
+  missingServerConfigResponse,
+} from "@/lib/api/config";
 import { ReservationRecord } from "@/lib/dal/reservation/types";
 
 type CancellationContext = {
@@ -13,6 +14,21 @@ type CancellationContext = {
 };
 
 export async function POST(req: NextRequest) {
+  const missingConfig = getMissingServerConfig(["DATABASE_URL"]);
+
+  if (missingConfig.length > 0) {
+    return missingServerConfigResponse(missingConfig);
+  }
+
+  const [
+    { getReservationCallContext },
+    { generateRankingList },
+    { findWaitingClients },
+  ] = await Promise.all([
+    import("@/lib/services/call"),
+    import("@/lib/services/raking"),
+    import("@/lib/services/waiting-client"),
+  ]);
   const { reservation }: { reservation?: ReservationRecord } = await req.json();
 
   if (!reservation) {
