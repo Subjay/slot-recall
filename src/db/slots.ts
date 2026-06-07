@@ -1,13 +1,11 @@
+import { and, eq, gte, lte, inArray, type SQL } from 'drizzle-orm';
 import { db } from './client';
+import { slots, patients } from './schema';
 import type { Slot } from '../types';
 
 export async function getSlot(id: number): Promise<Slot | null> {
-  const { data, error } = await db.from('slots').select('*').eq('id', id).single();
-  if (error) {
-    if (error.code === 'PGRST116') return null;
-    throw error;
-  }
-  return data as Slot;
+  const rows = await db.select().from(slots).where(eq(slots.id, id)).limit(1);
+  return (rows[0] as Slot) ?? null;
 }
 
 export async function getSlots(filters: {
@@ -15,52 +13,53 @@ export async function getSlots(filters: {
   provider?: string;
   status?: string;
 }): Promise<Slot[]> {
-  let q = db.from('slots').select('*, booked_patient:patients(*)').order('start_time');
-  if (filters.provider) q = q.eq('provider', filters.provider);
-  if (filters.status) q = q.eq('status', filters.status);
+  const conds: SQL[] = [];
+  if (filters.provider) conds.push(eq(slots.provider, filters.provider));
+  if (filters.status) conds.push(eq(slots.status, filters.status));
   if (filters.date) {
     const start = new Date(filters.date);
     start.setHours(0, 0, 0, 0);
     const end = new Date(filters.date);
     end.setHours(23, 59, 59, 999);
-    q = q.gte('start_time', start.toISOString()).lte('start_time', end.toISOString());
+    conds.push(gte(slots.start_time, start.toISOString()));
+    conds.push(lte(slots.start_time, end.toISOString()));
   }
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as unknown as Slot[];
+
+  const joined = await db
+    .select()
+    .from(slots)
+    .leftJoin(patients, eq(slots.booked_patient_id, patients.id))
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(slots.start_time);
+
+  // Shape each row to { ...slot, booked_patient } for the dashboard.
+  return joined.map(j => ({ ...j.slots, booked_patient: j.patients })) as unknown as Slot[];
 }
 
 // Atomically lock a slot for recovery. Returns true if this call won the lock.
-// Guards: slot must be in booked|cancelled (not already in_recovery or open).
 export async function lockSlotForRecovery(id: number): Promise<boolean> {
-  const { data, error } = await db
-    .from('slots')
-    .update({ status: 'in_recovery', updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .in('status', ['booked', 'cancelled'])
-    .select('id');
-  if (error) throw error;
-  return (data?.length ?? 0) > 0;
+  const rows = await db
+    .update(slots)
+    .set({ status: 'in_recovery', updated_at: new Date().toISOString() })
+    .where(and(eq(slots.id, id), inArray(slots.status, ['booked', 'cancelled'])))
+    .returning({ id: slots.id });
+  return rows.length > 0;
 }
 
 // Revert an in_recovery slot back to open (on exhaustion or abort).
 export async function openSlot(id: number): Promise<void> {
-  const { error } = await db
-    .from('slots')
-    .update({ status: 'open', booked_patient_id: null, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('status', 'in_recovery');
-  if (error) throw error;
+  await db
+    .update(slots)
+    .set({ status: 'open', booked_patient_id: null, updated_at: new Date().toISOString() })
+    .where(and(eq(slots.id, id), eq(slots.status, 'in_recovery')));
 }
 
 // Atomic booking guard — books only if slot is still in_recovery. Returns false if already booked.
 export async function bookSlotRow(id: number, patientId: number): Promise<boolean> {
-  const { data, error } = await db
-    .from('slots')
-    .update({ status: 'booked', booked_patient_id: patientId, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('status', 'in_recovery')
-    .select('id');
-  if (error) throw error;
-  return (data?.length ?? 0) > 0;
+  const rows = await db
+    .update(slots)
+    .set({ status: 'booked', booked_patient_id: patientId, updated_at: new Date().toISOString() })
+    .where(and(eq(slots.id, id), eq(slots.status, 'in_recovery')))
+    .returning({ id: slots.id });
+  return rows.length > 0;
 }

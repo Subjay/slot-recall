@@ -11,8 +11,7 @@ function optionalEnv(key: string, fallback: string): string {
 }
 
 export const config = {
-  SUPABASE_URL: requireEnv('SUPABASE_URL'),
-  SUPABASE_SERVICE_KEY: requireEnv('SUPABASE_SERVICE_KEY'),
+  DATABASE_URL: requireEnv('DATABASE_URL'),
 
   FONIO_API_KEY: optionalEnv('FONIO_API_KEY', ''),
   FONIO_FROM_NUMBER: optionalEnv('FONIO_FROM_NUMBER', ''),

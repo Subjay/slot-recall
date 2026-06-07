@@ -1,21 +1,28 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
+import { recovery_sessions, call_attempts } from '../db/schema';
 
 const metricsRoute: FastifyPluginAsync = async fastify => {
   fastify.get('/metrics', async (_req, reply) => {
-    const [sessionsRes, attemptsRes] = await Promise.all([
-      db.from('recovery_sessions').select('status, created_at, updated_at'),
-      db.from('call_attempts').select('outcome, created_at, completed_at, recovery_session_id'),
+    const [sessions, attempts] = await Promise.all([
+      db
+        .select({
+          id: recovery_sessions.id,
+          status: recovery_sessions.status,
+          created_at: recovery_sessions.created_at,
+        })
+        .from(recovery_sessions),
+      db
+        .select({
+          outcome: call_attempts.outcome,
+          completed_at: call_attempts.completed_at,
+          recovery_session_id: call_attempts.recovery_session_id,
+        })
+        .from(call_attempts),
     ]);
 
-    if (sessionsRes.error) throw sessionsRes.error;
-    if (attemptsRes.error) throw attemptsRes.error;
-
-    const sessions = sessionsRes.data ?? [];
-    const attempts = attemptsRes.data ?? [];
-
     const total = sessions.length;
-    const byStatus = countBy(sessions, s => s.status as string);
+    const byStatus = countBy(sessions, s => s.status);
 
     const completedSessions = sessions.filter(s => s.status === 'completed');
     const fillRate = total > 0 ? completedSessions.length / total : 0;
@@ -24,29 +31,30 @@ const metricsRoute: FastifyPluginAsync = async fastify => {
     const acceptedAttempts = attempts.filter(a => a.outcome === 'accepted' && a.completed_at);
     let avgFillTimeMs: number | null = null;
     if (acceptedAttempts.length > 0) {
-      const sessionCreatedAt: Record<string, string> = {};
-      for (const s of sessions) {
-        sessionCreatedAt[(s as { status: string; created_at: string; updated_at: string } & Record<string, string>).id] = s.created_at;
-      }
+      const sessionCreatedAt = new Map<string, string>();
+      for (const s of sessions) sessionCreatedAt.set(s.id, s.created_at);
+
       const times = acceptedAttempts
         .map(a => {
-          const start = sessionCreatedAt[a.recovery_session_id ?? ''];
+          const start = a.recovery_session_id ? sessionCreatedAt.get(a.recovery_session_id) : undefined;
           if (!start || !a.completed_at) return null;
           return new Date(a.completed_at).getTime() - new Date(start).getTime();
         })
         .filter((t): t is number => t !== null);
+
       if (times.length > 0) {
         avgFillTimeMs = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
       }
     }
 
     const outcomesByReason = countBy(
-      attempts.filter(a => a.outcome !== null),
-      a => a.outcome as string,
+      attempts.filter((a): a is typeof a & { outcome: string } => a.outcome !== null),
+      a => a.outcome,
     );
 
     return reply.send({
       total_sessions: total,
+      slots_recovered: completedSessions.length,
       by_status: byStatus,
       fill_rate: +fillRate.toFixed(3),
       avg_fill_time_ms: avgFillTimeMs,

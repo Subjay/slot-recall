@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
+import { patients } from '../db/schema';
 import type { Patient } from '../types';
 
 const patientsRoute: FastifyPluginAsync = async fastify => {
@@ -20,9 +21,8 @@ const patientsRoute: FastifyPluginAsync = async fastify => {
       },
     },
     async (req, reply) => {
-      const { data, error } = await db.from('patients').insert(req.body).select().single();
-      if (error) throw error;
-      return reply.status(201).send(data);
+      const rows = await db.insert(patients).values(req.body).returning();
+      return reply.status(201).send(rows[0]);
     },
   );
 };
